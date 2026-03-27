@@ -368,8 +368,8 @@ will only contribute when $L \lesssim 2\, r_\text{cut}$.
   at load time. The note printed at startup is informational only.
 - **Enabling `pdb_stride` significantly slows down the run.** Writing a
   full-system PDB requires MDAnalysis to format and write coordinates for
-  every atom in the system (e.g. 436k atoms) for each requested frame. For
-  large systems this can take several seconds per frame and dominate the
+  every atom in a large system for each requested frame. For
+  large systems, this can take several seconds per frame and dominate the
   total runtime. Use `pdb_stride: tenth` or a large integer during
   production runs and reserve `pdb_stride: all` for quick validation of a
   small number of frames. If you only need to verify the QM/MM partitioning,
