@@ -1,5 +1,4 @@
-# ezQMMM2.0
-# ezQMMM — Easy QM/MM Input File Generator
+# ezQMMM2.0 — Easy QM/MM Input File Generator
 
 Generates QM/MM single-point calculation input files from CHARMM/NAMD MD
 trajectories. Supports **ORCA**, **Q-Chem**, and **Psi4**.
