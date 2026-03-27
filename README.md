@@ -1,4 +1,4 @@
-# ezQMMM2.0 — Easy QM/MM Input File Generator
+# ezQMMM 2.0 — Easy QM/MM Input File Generator
 
 Generates QM/MM single-point calculation input files from CHARMM/NAMD MD
 trajectories. Supports **ORCA**, **Q-Chem**, and **Psi4**.
@@ -19,7 +19,7 @@ pip install MDAnalysis numpy pyyaml
 # Generate an example config
 python ezQMMM2.py --example
 
-# Edit config_example.yaml, then run
+# Edit config_example.yaml, then run ezQMMM 2.0
 python ezQMMM2.py config.yaml
 ```
 
@@ -48,7 +48,7 @@ mm_switchdist: 35.0           # Start of switching zone (Angstrom)
                               # Default: mm_cutoff - 5.0
 
 # ── Boundary scheme ──────────────────────────────────────────────────────────
-boundary_scheme: RCD          # RCD | CS | Z1 | NONE
+boundary_scheme: RCD          # RCD | CS | Z1 | Z2 | Z3 | NONE
 
 # ── Frame selection ──────────────────────────────────────────────────────────
 first_frame: 0                # First frame index (0-based)
@@ -115,7 +115,7 @@ The `qm_selection` field uses MDAnalysis selection language, which is similar
 to but **not identical** to VMD's Tcl-based atom selection. The key
 differences and common patterns are shown below.
 
-### A Few Selection Examples
+### Common Selection Examples
 
 ```yaml
 # Single residue by number
@@ -191,7 +191,7 @@ for atom in sel:
           f"mass={atom.mass:.3f} charge={atom.charge:.4f}")
 ```
 
-Cross-check the atom count and identity against VMD before running ezQMMM2.0.
+Cross-check the atom count and identity against VMD before running ezQMMM.
 
 
 ### MM Point Charge Selection
@@ -222,9 +222,11 @@ the chosen scheme:
 
 | Scheme | MM1 treatment | Purpose |
 |---|---|---|
-| `RCD` | Removed; charge redistributed to midpoint virtual charges and MM2 atoms adjusted | Preserves bond dipole and charge neutrality |
-| `CS` | Removed; charge split into a dipole pair around MM2 | Charge shift scheme |
-| `Z1` | Removed (charge zeroed) | Simplest; may break neutrality |
+| `RCD` | Removed; charge redistributed to midpoint virtual charges and MM2 atoms adjusted | Preserves bond dipole and charge neutrality — recommended default |
+| `CS` | Removed; charge split into a dipole pair around MM2 | Charge shift scheme; preserves local dipole |
+| `Z1` | Removed (charge zeroed) | Simplest elimination; breaks charge neutrality |
+| `Z2` | MM1 and all MM2 atoms removed (charges zeroed) | Eliminates two shells; larger neutrality error but removes close contacts |
+| `Z3` | MM1, MM2, and all MM3 atoms removed (charges zeroed) | Eliminates three shells; most aggressive, largest neutrality error |
 | `NONE` | No modification | Use only if no QM/MM covalent bonds exist |
 
 **RCD virtual charge factor of 2**: the virtual charge placed at the
@@ -259,7 +261,7 @@ region is close to the box boundary, neglecting periodic images introduces
 an asymmetry in the electrostatic environment that can affect the QM
 wavefunction and energetics.
 
-When `supercell_axes` is set, ezQMMM2.0 tiles the primary MM charge set along
+When `supercell_axes` is set, ezQMMM tiles the primary MM charge set along
 the specified axes to generate explicit image copies. The number of shells
 along each axis is derived automatically:
 
@@ -340,9 +342,14 @@ will only contribute when $L \lesssim 2\, r_\text{cut}$.
   `atom.bonds` from MDAnalysis. If the PSF was built without explicit bonds
   (rare but possible), no boundary bonds will be detected and no link atoms
   or charge corrections will be applied regardless of the chosen scheme.
-- **Only C–C type cuts are well-tested.** Cutting across polar bonds (C–N,
-  C–O) with a link hydrogen introduces additional errors that none of the
-  boundary schemes fully correct. Avoid such cuts where possible.
+- **Z1, Z2, Z3 break charge neutrality.** These schemes zero charges without
+  redistribution. Z1 removes only MM1, Z2 removes MM1 and all MM2 atoms, and
+  Z3 removes three shells. The larger the shell, the greater the charge
+  imbalance introduced at the boundary. For systems with significant partial
+  charges near the boundary this can noticeably affect the QM wavefunction.
+  RCD is preferred for production calculations; Z-schemes are useful for
+  quick tests or non-polar boundaries where the missing charges have
+  negligible electrostatic effect.
 
 ### Supercell
 - **Orthorhombic boxes only.** The image tiling uses simple `n * L` offsets
@@ -368,12 +375,12 @@ will only contribute when $L \lesssim 2\, r_\text{cut}$.
   at load time. The note printed at startup is informational only.
 - **Enabling `pdb_stride` significantly slows down the run.** Writing a
   full-system PDB requires MDAnalysis to format and write coordinates for
-  every atom in a large system for each requested frame. For
-  large systems, this can take several seconds per frame and dominate the
-  total runtime. Use `pdb_stride: tenth` or a large integer during
-  production runs and reserve `pdb_stride: all` for quick validation of a
-  small number of frames. If you only need to verify the QM/MM partitioning,
-  running a single frame with `pdb_stride: all` is sufficient.
+  every atom in the system for each requested frame. For large systems this
+  can take several seconds per frame and dominate the total runtime. Use
+  `pdb_stride: tenth` or a large integer during production runs and reserve
+  `pdb_stride: all` for quick validation of a small number of frames. If you
+  only need to verify the QM/MM partitioning, running a single frame with
+  `pdb_stride: all` is sufficient.
 
 ### Program-Specific
 - **ORCA**: point charges are written to a separate `_charges.pc` file.
