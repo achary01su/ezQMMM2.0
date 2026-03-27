@@ -5,8 +5,8 @@ Generates QM/MM single point calculation input files from MD trajectories
 Supports: ORCA, Q-Chem, and Psi4
 
 Usage:
-    python ezQMMM.py --example
-    python ezQMMM.py config.yaml
+    python ezQMMM2.py --example
+    python ezQMMM2.py config.yaml
 
 Reference:
     NAMD QM/MM: https://www.ks.uiuc.edu/Research/qmmm/
@@ -1017,8 +1017,8 @@ def main():
     if len(sys.argv) < 2:
         print("ezQMMM 2.0 - Easy QM/MM Input Generator")
         print("\nUsage:")
-        print("  python ezQMMM.py config.yaml")
-        print("  python ezQMMM.py --example")
+        print("  python ezQMMM2.py config.yaml")
+        print("  python ezQMMM2.py --example")
         sys.exit(1)
 
     if sys.argv[1] == '--example':
