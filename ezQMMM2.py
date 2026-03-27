@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 """
-ezQMMM - Easy QM/MM Input File Generator
+ezQMMM 2.0 — Easy QM/MM Input File Generator
 Generates QM/MM single point calculation input files from MD trajectories
 Supports: ORCA, Q-Chem, and Psi4
-
-Requirements:
-    pip install MDAnalysis numpy pyyaml
 
 Usage:
     python ezQMMM.py --example
@@ -474,6 +471,59 @@ class QMMMGenerator:
                     'reason': 'MM1 removed (Z1)',
                 })
 
+            elif scheme == 'Z2':
+                # Zero MM1 and all MM2 atoms
+                removed_atoms.add(mm1_idx)
+                charge_mods.append({
+                    'type': 'removed', 'atom': mm1_atom,
+                    'old_charge': mm1_charge, 'new_charge': 0.0,
+                    'reason': 'MM1 removed (Z2)',
+                })
+                for mm2_idx in mm2_cut:
+                    mm2_atom = self.universe.atoms[mm2_idx]
+                    old_q    = mm2_atom.charge
+                    removed_atoms.add(mm2_idx)
+                    charge_mods.append({
+                        'type': 'removed', 'atom': mm2_atom,
+                        'old_charge': old_q, 'new_charge': 0.0,
+                        'reason': 'MM2 removed (Z2)',
+                    })
+
+            elif scheme == 'Z3':
+                # Zero MM1, all MM2, and all MM3 atoms
+                removed_atoms.add(mm1_idx)
+                charge_mods.append({
+                    'type': 'removed', 'atom': mm1_atom,
+                    'old_charge': mm1_charge, 'new_charge': 0.0,
+                    'reason': 'MM1 removed (Z3)',
+                })
+                seen_mm3 = set()  # guard against duplicate log entries
+                for mm2_idx in mm2_cut:
+                    mm2_atom = self.universe.atoms[mm2_idx]
+                    old_q    = mm2_atom.charge
+                    removed_atoms.add(mm2_idx)
+                    charge_mods.append({
+                        'type': 'removed', 'atom': mm2_atom,
+                        'old_charge': old_q, 'new_charge': 0.0,
+                        'reason': 'MM2 removed (Z3)',
+                    })
+                    mm3_atoms = self._get_bonded_atoms(mm2_idx)
+                    mm3_cut   = [i for i in mm3_atoms
+                                 if i in atom_map
+                                 and i != mm1_idx
+                                 and i not in mm2_cut   # skip other MM2 atoms
+                                 and i not in seen_mm3]  # skip already-logged MM3
+                    for mm3_idx in mm3_cut:
+                        seen_mm3.add(mm3_idx)
+                        mm3_atom = self.universe.atoms[mm3_idx]
+                        old_q3   = mm3_atom.charge
+                        removed_atoms.add(mm3_idx)
+                        charge_mods.append({
+                            'type': 'removed', 'atom': mm3_atom,
+                            'old_charge': old_q3, 'new_charge': 0.0,
+                            'reason': 'MM3 removed (Z3)',
+                        })
+
             elif scheme == 'RCD':
                 removed_atoms.add(mm1_idx)
                 charge_mods.append({
@@ -737,6 +787,13 @@ class QMMMGenerator:
         if 'program' not in config:
             raise ValueError("'program' required (orca/qchem/psi4)")
 
+        valid_schemes = {'RCD', 'CS', 'Z1', 'Z2', 'Z3', 'NONE'}
+        if bscheme not in valid_schemes:
+            raise ValueError(
+                f"boundary_scheme '{bscheme}' not recognised. "
+                f"Valid options: {', '.join(sorted(valid_schemes))}"
+            )
+
         program       = config['program'].lower()
         keywords      = config.get(f'{program}_keywords', '')
         custom_blocks = config.get(f'{program}_blocks', '')
@@ -907,7 +964,7 @@ class QMMMGenerator:
 # ---------------------------------------------------------------------------
 
 def create_example_config():
-    config = """# ezQMMM Configuration
+    config = """# ezQMMM 2.0 Configuration
 psf_file: system.psf
 dcd_file: trajectory.dcd
 qm_selection: "resid 100 and not backbone"
@@ -958,7 +1015,7 @@ qchem_blocks: |
 
 def main():
     if len(sys.argv) < 2:
-        print("ezQMMM - Easy QM/MM Input Generator")
+        print("ezQMMM 2.0 - Easy QM/MM Input Generator")
         print("\nUsage:")
         print("  python ezQMMM.py config.yaml")
         print("  python ezQMMM.py --example")
