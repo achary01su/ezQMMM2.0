@@ -17,10 +17,10 @@ pip install MDAnalysis numpy pyyaml
 
 ```bash
 # Generate an example config
-python ezQMMM.py --example
+python ezQMMM2.py --example
 
 # Edit config_example.yaml, then run
-python ezQMMM.py config.yaml
+python ezQMMM2.py config.yaml
 ```
 
 ---
@@ -191,7 +191,7 @@ for atom in sel:
           f"mass={atom.mass:.3f} charge={atom.charge:.4f}")
 ```
 
-Cross-check the atom count and identity against VMD before running ezQMMM.
+Cross-check the atom count and identity against VMD before running ezQMMM2.0.
 
 
 ### MM Point Charge Selection
@@ -259,7 +259,7 @@ region is close to the box boundary, neglecting periodic images introduces
 an asymmetry in the electrostatic environment that can affect the QM
 wavefunction and energetics.
 
-When `supercell_axes` is set, ezQMMM tiles the primary MM charge set along
+When `supercell_axes` is set, ezQMMM2.0 tiles the primary MM charge set along
 the specified axes to generate explicit image copies. The number of shells
 along each axis is derived automatically:
 
