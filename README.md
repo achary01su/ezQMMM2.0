@@ -66,7 +66,7 @@ supercell_axes: []            # Axes to tile: any combo of x/y/z or a/b/c
                               # Leave empty to disable
 
 # ── Structure output ─────────────────────────────────────────────────────────
-pdb_stride: null              # Write PSF+PDB every N frames
+pdb_stride: null              # Write PDB (+ copy of original PSF) every N frames
                               # Options: all | half | tenth | integer | null
 
 # ── Program-specific keywords ────────────────────────────────────────────────
@@ -92,8 +92,8 @@ For each frame the following are generated under `output_dir`:
 |---|---|
 | `<prefix>_frame<N>_qchem.in` | Q-Chem input (or `_orca.inp` / `_psi4.dat`) |
 | `<prefix>_frame<N>_charges.pc` | ORCA only — external point charge file |
-| `<prefix>_frame<N>_struct.pdb` | Full-system PDB with beta-column labels |
-| `<prefix>_frame<N>_struct.psf` | Copy of original PSF (paired topology) |
+| `<prefix>_struct.psf` | Single copy of original PSF — shared topology for all PDB frames |
+| `<prefix>_frame<N>_struct.pdb` | Full-system PDB for frame N with beta-column labels |
 | `<prefix>_boundary.log` | Per-frame boundary charge modification detail |
 | `<prefix>_switching.log` | Per-frame switching-zone charge detail |
 
@@ -124,7 +124,7 @@ qm_selection: "resid 100"
 # Multiple residues
 qm_selection: "resid 100 101 102"
 
-# Residue range
+# Residue range (inclusive)
 qm_selection: "resid 100:105"
 
 # Specific segment and residue (CHARMM segid)
@@ -136,17 +136,25 @@ qm_selection: "resname HEM"
 # Specific atoms within a residue
 qm_selection: "resid 100 and name FE"
 
-# Exclude backbone — keep only sidechain + Cα
+# Exclude backbone (N, CA, C, O) — keeps sidechain heavy atoms only
+# Note: MDAnalysis backbone includes Cα, so 'not backbone' excludes it.
+# To keep sidechain AND Cα use: "resid 100 and not name N C O"
 qm_selection: "resid 100 and not backbone"
 
-# Cofactor plus coordinating residues
+# Cofactor plus two specific coordinating residues (sidechain only)
 qm_selection: "resname FAD or (resid 45 112 and not backbone)"
 
-# All atoms within a distance of a residue (sphere around ligand)
+# Ligand plus all atoms within 3.5 Å of the ligand
+# Note: 'around' excludes the reference group itself, so 'resname LIG'
+# must be added back explicitly to include the ligand atoms too.
 qm_selection: "resname LIG or (around 3.5 resname LIG)"
 
-# Metal ion plus its coordination shell
-qm_selection: "resname ZN or (sphzone 2.5 resname ZN)"
+# Single metal ion plus its coordination shell
+# Note: 'sphzone' uses the COG of the reference and INCLUDES reference
+# atoms, so the metal itself is already in the selection — no need to
+# add 'resname ZN or'. For multiple metals use 'around' instead, as
+# sphzone would use a single COG between them.
+qm_selection: "sphzone 2.5 resname ZN"
 ```
 
 ### Key Differences from VMD
@@ -155,25 +163,29 @@ qm_selection: "resname ZN or (sphzone 2.5 resname ZN)"
 |---|---|---|
 | Residue number | `resid 100` | `resid 100` |
 | Residue range | `resid 100:105` | `resid 100 to 105` |
-| Segment ID | `segid PROA` | `segid PROA` |
+| Segment ID | `segid PROA` | `segname PROA` |
 | Residue name | `resname HEM` | `resname HEM` |
 | Atom name | `name CA` | `name CA` |
 | Logical AND | `and` | `and` |
 | Logical OR | `or` | `or` |
 | Logical NOT | `not` | `not` |
 | Distance selection | `around 3.5 resname LIG` | `within 3.5 of resname LIG` |
-| Sphere zone | `sphzone 2.5 resname ZN` | `within 2.5 of resname ZN` |
-| Backbone atoms | `backbone` | `backbone` |
+| Sphere zone (includes reference) | `sphzone 2.5 resname ZN` | `within 2.5 of resname ZN` |
+| Backbone atoms | `backbone` (N, CA, C, O only) | `backbone` (includes OT\* termini) |
 | Protein atoms | `protein` | `protein` |
-| By index (0-based) | `index 0 1 2` | `index 1 2 3` (1-based) |
+| By index (0-based) | `index 0 1 2` | `index 0 1 2` |
+| By serial (1-based) | *(not available)* | `serial 1 2 3` |
 | Atom type | `type CT1` | `type CT1` |
-| Chain | `segid` (CHARMM) | `chain` (PDB) |
+| Chain | `segid` (CHARMM PSF) | `segname` (PSF) / `chain` (PDB) |
 
 The most common pitfall when translating a VMD selection to MDAnalysis is:
 
-- **`within` → `around`**: VMD uses `within X of ...`, MDAnalysis uses `around X ...`
-- **Index offset**: VMD atom indices are **1-based**; MDAnalysis indices are **0-based**
-- **Chain vs segid**: VMD uses `chain A` for PDB chain IDs; CHARMM PSF files use `segid` (e.g. `PROA`, `MEMB`). For PSF-based systems always use `segid` in MDAnalysis.
+- **`within` → `around`**: VMD uses `within X of ...`, MDAnalysis uses `around X ...`. They are **not equivalent** — `around` excludes atoms in the reference group itself, while VMD's `within X of` includes them. To replicate VMD's behaviour in MDAnalysis use `resname LIG or (around X resname LIG)`.
+- **`sphzone` includes reference atoms**: Unlike `around`, `sphzone` returns atoms within a sphere centered on the COG of the reference selection and **includes** the reference atoms. For a single metal ion `sphzone 2.5 resname ZN` already contains the metal — no `or resname ZN` needed. For multiple metal ions use `around` instead since `sphzone` would place a single sphere between them.
+- **`backbone` difference**: MDAnalysis `backbone` strictly selects atoms named N, CA, C, O in protein residues. VMD `backbone` additionally includes terminal oxygen atoms (OT\*). Applying `not backbone` in MDAnalysis therefore excludes Cα — use `not name N C O` if you want to keep Cα.
+- **Index vs serial**: Both VMD and MDAnalysis use `index` with 0-based numbering. VMD additionally provides `serial` (1-based, matching PDB file conventions) — MDAnalysis has no direct equivalent. When cross-referencing atom numbers from a PDB file, use `serial` in VMD but note MDAnalysis `index` will be one less than the PDB serial number.
+- **segname vs segid**: VMD uses `segname` for the segment identifier; MDAnalysis uses `segid`. For PSF-based systems always use `segid` in MDAnalysis.
+- **Chain vs segid**: VMD uses `chain` for PDB chain IDs; CHARMM PSF files use `segid` (e.g. `PROA`, `MEMB`). For PSF-based systems always use `segid` in MDAnalysis.
 - **Residue ranges**: VMD uses `resid 100 to 105`; MDAnalysis uses `resid 100:105`
 
 ### Verifying Your Selection
@@ -326,7 +338,7 @@ will only contribute when $L \lesssim 2\, r_\text{cut}$.
   masses because PSF files store CHARMM atom types, not element symbols. The
   lookup table covers H, D, C, N, O, Na, Mg, P, S, Cl, K, Ca, Fe, Cu, Zn.
   Unusual elements will be assigned `X` and the QM input will be wrong.
-  Check `QM=N` in the console output against expectation.
+  Check the `QM=` atom count in the console output against expectation.
 
 ### MM Environment
 - **Whole-residue inclusion** means a single atom near the cutoff edge pulls
@@ -343,13 +355,15 @@ will only contribute when $L \lesssim 2\, r_\text{cut}$.
   (rare but possible), no boundary bonds will be detected and no link atoms
   or charge corrections will be applied regardless of the chosen scheme.
 - **Z1, Z2, Z3 break charge neutrality.** These schemes zero charges without
-  redistribution. Z1 removes only MM1, Z2 removes MM1 and all MM2 atoms, and
-  Z3 removes three shells. The larger the shell, the greater the charge
-  imbalance introduced at the boundary. For systems with significant partial
-  charges near the boundary this can noticeably affect the QM wavefunction.
-  RCD is preferred for production calculations; Z-schemes are useful for
-  quick tests or non-polar boundaries where the missing charges have
-  negligible electrostatic effect.
+  redistribution. MM1 is the atom directly bonded to QM, MM2 is bonded to
+  MM1, MM3 is bonded to MM2 — consecutive atoms along the covalent bond
+  chain, not spatial shells. Z1 removes only MM1, Z2 removes MM1 and all
+  MM2 atoms, and Z3 removes three consecutive MM atoms. The further along
+  the chain, the greater the charge imbalance introduced. For systems with
+  significant partial charges near the boundary this can noticeably affect
+  the QM wavefunction. RCD is preferred for production calculations;
+  Z-schemes are useful for quick tests or non-polar boundaries where the
+  missing charges have negligible electrostatic effect.
 
 ### Supercell
 - **Orthorhombic boxes only.** The image tiling uses simple `n * L` offsets
@@ -358,11 +372,13 @@ will only contribute when $L \lesssim 2\, r_\text{cut}$.
 - **For large boxes `img=0` is expected and correct.** Images are only
   non-zero when `L < mm_cutoff + max_QM_to_edge_distance`. For boxes much
   larger than the cutoff, no periodic neighbours will ever be within range.
-- **`supercell_axes` disables PBC for the primary selection.** When tiling
-  is active, primary charges are selected using raw Cartesian distances (no
-  PBC wrap). PBC is handled exclusively through explicit image copies. This
-  is intentional and correct but means the cutoff sphere may appear flat-
-  faced for very asymmetric QM placements. If in doubt, visualize the PDB.
+- **PBC is always active for primary MM selection.** The minimum image
+  convention (`box=dimensions`) is used when selecting primary MM atoms,
+  ensuring a correct spherical cutoff regardless of whether `supercell_axes`
+  is set. When tiling is enabled, explicit image copies supplement the
+  primary selection — they do not replace it. The two mechanisms work
+  together without double-counting because primary charges are remapped to
+  their minimum image positions before tiling.
 
 ### PDB / PSF Output
 - **Long bonds in VMD are a visualization artifact.** Atoms near the box
@@ -373,6 +389,11 @@ will only contribute when $L \lesssim 2\, r_\text{cut}$.
   PDB for coordinates. The beta column identifies which atoms are active.
 - **tempfactors are not in PSF files.** MDAnalysis initializes them to zero
   at load time. The note printed at startup is informational only.
+- **The PSF is written once, not per frame.** The PSF is topology-only and
+  identical for every frame, so ezQMMM 2.0 copies it once as
+  `<prefix>_struct.psf` at the start of the run. Each frame produces only a
+  PDB file. This avoids redundant copies and reduces disk usage significantly
+  for long runs.
 - **Enabling `pdb_stride` significantly slows down the run.** Writing a
   full-system PDB requires MDAnalysis to format and write coordinates for
   every atom in the system for each requested frame. For large systems this
@@ -399,5 +420,5 @@ will only contribute when $L \lesssim 2\, r_\text{cut}$.
 
 - NAMD QM/MM: https://www.ks.uiuc.edu/Research/qmmm/
 - Melo et al., *Nature Methods* **15**, 351–354 (2018)
-- RCD and RC boundary schemes: Lin & Truhlar, *J. Phys. Chem. A* **109**, 3991–4004 (2005). DOI: 10.1021/jp0446332
+- RCD boundary: Lin & Truhlar, *J. Phys. Chem. A* **109**, 3991–4004 (2005). 
 - MDAnalysis: Michaud-Agrawal et al., *J. Comput. Chem.* **32**, 2319 (2011)
