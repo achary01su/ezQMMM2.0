@@ -86,13 +86,15 @@ class SwitchRecord:
 
 class QMMMGenerator:
     """Generate QM/MM input files from MD trajectories."""
-
+    # If the simulations used hydrogen mass repartition, 
+    # then this mass-to-element conversion will not work. 
+    # This is only intended for the standard mass of each element.
     MASS_TO_ELEMENT = {
-        (0.5,  1.5):  'H',  (1.5,  2.5):  'D',  (11.5, 12.5): 'C',
-        (13.5, 14.5): 'N',  (15.5, 16.5): 'O',  (22.5, 23.5): 'Na',
-        (24.0, 25.0): 'Mg', (30.5, 31.5): 'P',  (31.5, 32.5): 'S',
-        (34.5, 36.0): 'Cl', (38.5, 40.0): 'K',  (39.5, 41.0): 'Ca',
-        (54.5, 56.5): 'Fe', (63.0, 64.0): 'Cu', (64.0, 66.0): 'Zn',
+        (0.9,  1.2):  'H',  (1.9,  2.2):  'D',  (11.9, 12.2): 'C',
+        (13.9, 14.2): 'N',  (15.9, 16.2): 'O',  (22.9, 23.2): 'Na',
+        (24.0, 24.6): 'Mg', (30.8, 31.5): 'P',  (31.9, 32.2): 'S',
+        (35.2, 35.8): 'Cl', (38.9, 39.5): 'K',  (39.9, 40.5): 'Ca',
+        (55.6, 56.1): 'Fe', (63.2, 63.8): 'Cu', (65.1, 65.7): 'Zn',
     }
 
     def __init__(self, psf_file: str, dcd_file: str):
